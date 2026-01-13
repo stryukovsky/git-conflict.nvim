@@ -108,7 +108,7 @@ local ANCESTOR_HL = 'GitConflictAncestor'
 local CURRENT_LABEL_HL = 'GitConflictCurrentLabel'
 local INCOMING_LABEL_HL = 'GitConflictIncomingLabel'
 local ANCESTOR_LABEL_HL = 'GitConflictAncestorLabel'
-local PRIORITY = vim.highlight.priorities.user
+local PRIORITY = vim.hl.priorities.user
 local NAMESPACE = api.nvim_create_namespace('git-conflict')
 local AUGROUP_NAME = 'GitConflictCommands'
 
@@ -652,7 +652,7 @@ function M.setup(user_config)
     pattern = 'GitConflictDetected',
     callback = function()
       local bufnr = api.nvim_get_current_buf()
-      if config.disable_diagnostics then vim.diagnostic.disable(bufnr) end
+      if config.disable_diagnostics then vim.diagnostic.enable(false, {bufnr = bufnr}) end
       if config.default_mappings then setup_buffer_mappings(bufnr) end
     end,
   })
@@ -662,7 +662,7 @@ function M.setup(user_config)
     pattern = 'GitConflictResolved',
     callback = function()
       local bufnr = api.nvim_get_current_buf()
-      if config.disable_diagnostics then vim.diagnostic.enable(bufnr) end
+      if config.disable_diagnostics then vim.diagnostic.enable(false, {bufnr = bufnr}) end
       if config.default_mappings then clear_buffer_mappings(bufnr) end
     end,
   })
