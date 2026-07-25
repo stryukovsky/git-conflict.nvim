@@ -397,7 +397,7 @@ local function notify_conflict_position(bufnr, position)
 
   for index, conflict in ipairs(match.positions) do
     if conflict == position then
-      utils.notify(('conflict %d of %d'):format(index, #match.positions), 'info')
+      utils.notify(('Conflict %d of %d'):format(index, #match.positions), 'info')
       return
     end
   end
