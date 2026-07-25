@@ -95,8 +95,11 @@ The default mappings are:
 - <kbd>c</kbd><kbd>t</kbd> — choose theirs
 - <kbd>c</kbd><kbd>b</kbd> — choose both
 - <kbd>c</kbd><kbd>0</kbd> — choose none
-- <kbd>]</kbd><kbd>x</kbd> — move to previous conflict
-- <kbd>[</kbd><kbd>x</kbd> — move to next conflict
+- <kbd>]</kbd><kbd>x</kbd> — move to the next conflict and show its position
+- <kbd>[</kbd><kbd>x</kbd> — move to the previous conflict and show its position
+
+Conflict navigation displays `conflict N of M`, where `M` is the number of
+conflicts in the current buffer.
 
 If you would rather not use these then you can specify your own mappings.
 

@@ -124,8 +124,11 @@ The default mappings are:
 - ct — choose theirs
 - cb — choose both
 - c0 — choose none
-- ]x — move to previous conflict
-- [x — move to next conflict
+- ]x — move to the next conflict and show its position
+- [x — move to the previous conflict and show its position
+
+Conflict navigation displays `conflict N of M`, where `M` is the number of
+conflicts in the current buffer.
 
 If you would rather not use these then you can specify your own mappings.
 

@@ -387,6 +387,22 @@ local function set_cursor(position, side)
   api.nvim_win_set_cursor(0, { target.range_start + 1, 0 })
 end
 
+---Notify the current conflict's position within the buffer
+---@param bufnr integer
+---@param position ConflictPosition?
+local function notify_conflict_position(bufnr, position)
+  if not position then return end
+  local match = visited_buffers[bufnr]
+  if not match then return end
+
+  for index, conflict in ipairs(match.positions) do
+    if conflict == position then
+      utils.notify(('conflict %d of %d'):format(index, #match.positions), 'info')
+      return
+    end
+  end
+end
+
 ---Get the conflict marker positions for a buffer if any and update the buffers state
 ---@param bufnr integer
 ---@param range_start integer
@@ -737,6 +753,7 @@ function M.find_next(side)
     { wrap = true }
   )
   set_cursor(pos, side)
+  notify_conflict_position(0, pos)
 end
 
 ---@param side ConflictSide
@@ -747,6 +764,7 @@ function M.find_prev(side)
     { wrap = true, reverse = true }
   )
   set_cursor(pos, side)
+  notify_conflict_position(0, pos)
 end
 
 ---Select the changes to keep
