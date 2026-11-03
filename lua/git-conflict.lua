@@ -57,6 +57,7 @@ local job = utils.job
 --- @field positions ConflictPosition[]
 --- @field tick integer
 --- @field bufnr integer
+--- @field repo string repository that reported this conflict
 
 --- @class GitConflictMappings
 --- @field ours string
@@ -305,14 +306,14 @@ local function detect_conflicts(lines)
         ancestor = {},
       }
     end
-    if has_start and line:match(conflict_ancestor) then
+    if position and has_start and line:match(conflict_ancestor) then
       has_ancestor = true
       position.ancestor.range_start = lnum
       position.ancestor.content_start = lnum + 1
       position.current.range_end = lnum - 1
       position.current.content_end = lnum - 1
     end
-    if has_start and line:match(conflict_middle) then
+    if position and has_start and line:match(conflict_middle) then
       has_middle = true
       if has_ancestor then
         position.ancestor.content_end = lnum - 1
@@ -326,7 +327,7 @@ local function detect_conflicts(lines)
       position.incoming.range_start = lnum + 1
       position.incoming.content_start = lnum + 1
     end
-    if has_start and has_middle and line:match(conflict_end) then
+    if position and has_start and has_middle and line:match(conflict_end) then
       position.incoming.range_end = lnum
       position.incoming.content_end = lnum - 1
       positions[#positions + 1] = position
@@ -339,7 +340,7 @@ end
 
 ---Helper function to find a conflict position based on a comparator function
 ---@param bufnr integer
----@param comparator fun(string, integer): boolean
+---@param comparator fun(line: integer, position: ConflictPosition): boolean
 ---@param opts table?
 ---@return ConflictPosition?
 local function find_position(bufnr, comparator, opts)
@@ -434,22 +435,36 @@ end
 local function fetch_conflicts(buf)
   buf = (buf and api.nvim_buf_is_valid(buf)) and buf or api.nvim_get_current_buf()
   get_git_root(fn.fnamemodify(api.nvim_buf_get_name(buf), ':h'), function(git_root)
+    if not git_root or git_root == '' then return end
     get_conflicted_files(git_root, function(files, repo)
       for name, b in pairs(visited_buffers) do
-        -- FIXME: this will not work for nested repositories
-        if vim.startswith(name, repo) and not files[name] and b.bufnr then
+        if b.repo == repo and not files[name] then
           visited_buffers[name] = nil
-          M.clear(b.bufnr)
+          if b.bufnr and api.nvim_buf_is_valid(b.bufnr) then M.clear(b.bufnr) end
         end
       end
       for path, _ in pairs(files) do
         visited_buffers[path] = visited_buffers[path] or {}
+        visited_buffers[path].repo = repo
+        -- Repository changes need a reparse even when changedtick is unchanged.
+        visited_buffers[path].tick = nil
       end
+      -- Parse in each buffer's context: highlights and User events use the current buffer.
+      for _, bufnr in ipairs(api.nvim_list_bufs()) do
+        if api.nvim_buf_is_loaded(bufnr) and files[api.nvim_buf_get_name(bufnr)] and utils.is_valid_buf(bufnr) then
+          api.nvim_buf_call(bufnr, function() parse_buffer(bufnr) end)
+        end
+      end
+      vim.cmd('redraw')
     end)
   end)
 end
 
----@type table<string, userdata>
+---Reconcile conflict state with Git, including buffers whose text has not changed.
+---@param bufnr integer?
+function M.refresh(bufnr) fetch_conflicts(bufnr) end
+
+---@type table<string, uv.uv_fs_event_t>
 local watchers = {}
 
 local on_throttled_change = utils.throttle(1000, function(dir, err, change)
@@ -475,9 +490,10 @@ local function watch_gitdir(dir)
   -- Stop if there is already a watcher running
   if watchers[dir] then return end
 
-  ---@type userdata
-  watchers[dir] = vim.loop.new_fs_event()
-  watchers[dir]:start(
+  local watcher = vim.loop.new_fs_event()
+  if not watcher then return end
+  watchers[dir] = watcher
+  watcher:start(
     dir,
     { recursive = true },
     vim.schedule_wrap(function(...) on_throttled_change(dir, ...) end)
@@ -684,9 +700,8 @@ function M.setup(user_config)
   })
 
   api.nvim_set_decoration_provider(NAMESPACE, {
-    on_buf = function(_, bufnr, _) return utils.is_valid_buf(bufnr) end,
     on_win = function(_, _, bufnr, _, _)
-      if visited_buffers[bufnr] then process(bufnr) end
+      if utils.is_valid_buf(bufnr) and visited_buffers[bufnr] then process(bufnr) end
     end,
   })
 end
@@ -728,7 +743,7 @@ function M.conflicts_to_qf_items(callback)
       valid = 1,
     }
 
-    if visited_buf and next(visited_buf) then
+    if visited_buf and visited_buf.positions then
       quickfix_items_from_positions(item, items, visited_buf)
     else
       table.insert(items, item)
@@ -777,7 +792,7 @@ function M.choose(side)
     vim.defer_fn(function()
       local start = vim.api.nvim_buf_get_mark(0, '<')[1]
       local finish = vim.api.nvim_buf_get_mark(0, '>')[1]
-      local position = find_position(bufnr, function(line, pos)
+      local position = find_position(bufnr, function(_, pos)
         local left = pos.current.range_start >= start - 1
         local right = pos.incoming.range_end <= finish + 1
         return left and right
@@ -809,7 +824,7 @@ function M.choose(side)
           api.nvim_buf_del_extmark(0, NAMESPACE, position.marks.ancestor.label)
         end
         parse_buffer(bufnr)
-        position = find_position(bufnr, function(line, pos)
+        position = find_position(bufnr, function(_, pos)
           local left = pos.current.range_start >= start - 1
           local right = pos.incoming.range_end <= finish + 1
           return left and right
@@ -857,7 +872,7 @@ function M.conflict_count(bufnr)
   local name = api.nvim_buf_get_name(bufnr)
   if not visited_buffers[name] then return 0 end
 
-  return #visited_buffers[name].positions
+  return #(visited_buffers[name].positions or {})
 end
 
 return M

@@ -19,7 +19,7 @@ function M.notify(msg, level, once)
 end
 
 --- Start an async job
----@param cmd string
+---@param cmd string|string[]
 ---@param callback fun(data: string[]): nil
 function M.job(cmd, callback)
   fn.jobstart(cmd, {
