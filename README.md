@@ -33,7 +33,7 @@ I recommend using the {tag|version} field of your package manager, so your versi
 
 ```lua
 {
-  default_mappings = true, -- disable buffer local mapping created by this plugin
+  default_mappings = true, -- disable global mappings created by this plugin
   default_commands = true, -- disable commands created by this plugin
   disable_diagnostics = false, -- This will disable the diagnostics in a buffer whilst it is conflicted
   list_opener = 'copen', -- command or function to open the conflicts list
@@ -58,7 +58,6 @@ I recommend using the {tag|version} field of your package manager, so your versi
 
 You can list conflicts in the quick fix list using the `GitConflictListQf` command
 
-<img width="475" alt="Screen Shot 2022-03-27 at 12 03 43" src="https://user-images.githubusercontent.com/22454918/160278511-705a0361-a387-4fc1-8b20-bd799bf85b82.png">
 
 quickfix displayed using [nvim-pqf](https://github.com/yorickpeterse/nvim-pqf)
 
@@ -87,8 +86,13 @@ vim.api.nvim_create_autocmd('User', {
 
 ## Mappings
 
-This plugin offers default buffer local mappings inside conflicted files. This is primarily because applying these mappings only to relevant buffers
-is impossible through global mappings. A user can however disable these by setting `default_mappings = false` anyway and create global mappings as shown below.
+Mappings are registered globally during setup and stay available before, during,
+and after conflicts. No mappings are installed or removed by conflict detection.
+Choice actions outside a conflict (or a visual selection containing no complete
+conflict) show `Not at conflict`; navigation shows the same warning when the
+buffer has no conflicts. Set `default_mappings = false` to manage shortcuts
+yourself. This fork uses the host's `mappings.map` wrapper for RU/EN layouts.
+
 The default mappings are:
 
 - <kbd>c</kbd><kbd>o</kbd> — choose ours

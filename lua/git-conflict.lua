@@ -6,7 +6,7 @@ local utils = require('git-conflict.utils')
 local fn = vim.fn
 local api = vim.api
 local fmt = string.format
-local map = vim.keymap.set
+local map = require "mappings.map"
 local job = utils.job
 -----------------------------------------------------------------------------//
 -- REFERENCES:
@@ -420,7 +420,7 @@ local function parse_buffer(bufnr, range_start, range_end)
   else
     M.clear(bufnr)
   end
-  if prev_conflicts ~= has_conflict or not vim.b[bufnr].conflict_mappings_set then
+  if prev_conflicts ~= has_conflict then
     local pattern = has_conflict and 'GitConflictDetected' or 'GitConflictResolved'
     api.nvim_exec_autocmds('User', { pattern = pattern })
   end
@@ -567,17 +567,15 @@ local function set_plug_mappings()
   )
 end
 
-local function setup_buffer_mappings(bufnr)
+local function setup_mappings()
   local function opts(desc)
-    return { silent = true, buffer = bufnr, desc = 'Git Conflict: ' .. desc }
+    return { silent = true, desc = 'Git Conflict: ' .. desc }
   end
 
   map({ 'n', 'v' }, config.default_mappings.ours, '<Plug>(git-conflict-ours)', opts('Choose Ours'))
   map({ 'n', 'v' }, config.default_mappings.both, '<Plug>(git-conflict-both)', opts('Choose Both'))
   map({ 'n', 'v' }, config.default_mappings.none, '<Plug>(git-conflict-none)', opts('Choose None'))
   map({ 'n', 'v' }, config.default_mappings.theirs, '<Plug>(git-conflict-theirs)', opts('Choose Theirs'))
-  map({ 'v', 'v' }, config.default_mappings.ours, '<Plug>(git-conflict-ours)', opts('Choose Ours'))
-  -- map('V', config.default_mappings.ours, '<Plug>(git-conflict-ours)', opts('Choose Ours'))
   map(
     'n',
     config.default_mappings.prev,
@@ -590,20 +588,6 @@ local function setup_buffer_mappings(bufnr)
     '<Plug>(git-conflict-next-conflict)',
     opts('Next Conflict')
   )
-  vim.b[bufnr].conflict_mappings_set = true
-end
-
----@param key string
----@param mode "'n'|'v'|'o'|'nv'|'nvo'"?
----@return boolean
-local function is_mapped(key, mode) return fn.hasmapto(key, mode or 'n') > 0 end
-
-local function clear_buffer_mappings(bufnr)
-  if not bufnr or not vim.b[bufnr].conflict_mappings_set then return end
-  for _, mapping in pairs(config.default_mappings) do
-    if is_mapped(mapping) then api.nvim_buf_del_keymap(bufnr, 'n', mapping) end
-  end
-  vim.b[bufnr].conflict_mappings_set = false
 end
 
 -----------------------------------------------------------------------------//
@@ -651,6 +635,7 @@ function M.setup(user_config)
   if config.default_commands then set_commands() end
 
   set_plug_mappings()
+  if config.default_mappings then setup_mappings() end
 
   api.nvim_create_augroup(AUGROUP_NAME, { clear = true })
   api.nvim_create_autocmd('ColorScheme', {
@@ -685,7 +670,6 @@ function M.setup(user_config)
     callback = function()
       local bufnr = api.nvim_get_current_buf()
       if config.disable_diagnostics then vim.diagnostic.enable(false, {bufnr = bufnr}) end
-      if config.default_mappings then setup_buffer_mappings(bufnr) end
     end,
   })
 
@@ -695,7 +679,6 @@ function M.setup(user_config)
     callback = function()
       local bufnr = api.nvim_get_current_buf()
       if config.disable_diagnostics then vim.diagnostic.enable(false, {bufnr = bufnr}) end
-      if config.default_mappings then clear_buffer_mappings(bufnr) end
     end,
   })
 
@@ -767,6 +750,7 @@ function M.find_next(side)
     function(line, position) return line < position.current.range_start end,
     { wrap = true }
   )
+  if not pos then return utils.notify('Not at conflict', 'warn') end
   set_cursor(pos, side)
   notify_conflict_position(0, pos)
 end
@@ -778,6 +762,7 @@ function M.find_prev(side)
     function(line, position) return line > position.current.range_start end,
     { wrap = true, reverse = true }
   )
+  if not pos then return utils.notify('Not at conflict', 'warn') end
   set_cursor(pos, side)
   notify_conflict_position(0, pos)
 end
@@ -797,6 +782,7 @@ function M.choose(side)
         local right = pos.incoming.range_end <= finish + 1
         return left and right
       end)
+      if not position then return utils.notify('Not at conflict', 'warn') end
       while position ~= nil do
         local lines = {}
         if vim.tbl_contains({ SIDES.OURS, SIDES.THEIRS, SIDES.BASE }, side) then
@@ -834,7 +820,7 @@ function M.choose(side)
     return
   end
   local position = get_current_position(bufnr)
-  if not position then return end
+  if not position then return utils.notify('Not at conflict', 'warn') end
   local lines = {}
   if vim.tbl_contains({ SIDES.OURS, SIDES.THEIRS, SIDES.BASE }, side) then
     local data = position[name_map[side]]
